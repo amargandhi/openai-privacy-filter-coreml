@@ -3,12 +3,7 @@ set -euo pipefail
 
 OWNER="${1:-amargandhi}"
 REPO="${2:-openai-privacy-filter-coreml}"
-PROJECT_TITLE="${3:-OpenAI Privacy Filter Core ML}"
-
-PROJECT_URL="$(gh project create --owner "$OWNER" --title "$PROJECT_TITLE" --format json | python -c 'import json,sys; print(json.load(sys.stdin)["url"])')"
-echo "Created project: $PROJECT_URL"
-
-gh repo edit "$OWNER/$REPO" --enable-issues=true
+PROJECT_NUMBER="${3:-1}"
 
 create_issue() {
   local title="$1"
@@ -16,7 +11,7 @@ create_issue() {
   local url
   url="$(gh issue create --repo "$OWNER/$REPO" --title "$title" --body "$body")"
   echo "Created issue: $url"
-  gh project item-add "$PROJECT_URL" --owner "$OWNER" --url "$url" >/dev/null
+  gh project item-add "$PROJECT_NUMBER" --owner "$OWNER" --url "$url" >/dev/null
 }
 
 create_issue "Create Python 3.12 conversion environment" "Acceptance: scripts/check_environment.py passes with conversion dependencies."
