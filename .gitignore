@@ -1,5 +1,7 @@
 .DS_Store
 .venv/
+.build/
+.swiftpm/
 __pycache__/
 *.pyc
 .pytest_cache/

@@ -29,6 +29,7 @@ These items are intended to become GitHub issues and Project items.
 
 7. Port tokenizer/offset handling to Swift
    - Acceptance: token IDs and offsets match Python tokenizer fixtures.
+   - Status: Done with `PrivacyFilterTokenizer` SwiftPM target and Python-generated fixture tests.
 
 8. Port BIOES/Viterbi decode to Swift
    - Acceptance: Swift decoder matches Python decoder on fixture logits.

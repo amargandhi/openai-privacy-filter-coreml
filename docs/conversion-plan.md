@@ -49,5 +49,6 @@ Observed blockers:
 4. MLX BF16/MXFP8 fixture output reports. Done.
 5. Fixed 512-token `.mlpackage`.
 6. Enumerated-shape conversion.
-7. Swift tokenizer/Viterbi port.
-8. Manifold `CoreMLPrivacyBackend`.
+7. Swift tokenizer and offset handling. Done.
+8. Swift Viterbi/BIOES decode.
+9. Manifold `CoreMLPrivacyBackend`.

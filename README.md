@@ -51,6 +51,16 @@ python scripts/run_transformers_privacy_filter.py \
   --json-out reports/transformers-viterbi-128.json
 ```
 
+Run the Swift tokenizer parity tests:
+
+```bash
+swift test
+```
+
+The Swift test target looks for `OPENAI_PRIVACY_FILTER_TOKENIZER_JSON` first, then
+falls back to the local Hugging Face cache path for the pinned
+`openai/privacy-filter` revision.
+
 Attempt a small fixed-shape Core ML conversion first:
 
 ```bash
@@ -121,10 +131,11 @@ The MLX fixture scripts use a project-local `openai_privacy_filter` MLX implemen
 2. Compare PyTorch vs Core ML logits on fixtures. Done.
 3. Run MLX BF16/MXFP8 fixture inference for baseline behavior. Done.
 4. Add an official Transformers fixture baseline. Done.
-5. Implement or port tokenizer and Viterbi decode in Swift.
-6. Add a `CoreMLPrivacyBackend` in Manifold that conforms to the existing `PrivacyBackend` protocol.
-7. Benchmark compute units and sequence lengths.
-8. Add provenance records for model revision, Core ML Tools version, Torch version, Transformers version, shape set, precision, and conversion hash.
+5. Port tokenizer and offset handling to Swift. Done.
+6. Port BIOES/Viterbi decode to Swift.
+7. Add a `CoreMLPrivacyBackend` in Manifold that conforms to the existing `PrivacyBackend` protocol.
+8. Benchmark compute units and sequence lengths.
+9. Add provenance records for model revision, Core ML Tools version, Torch version, Transformers version, shape set, precision, and conversion hash.
 
 ## References
 

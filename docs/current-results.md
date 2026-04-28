@@ -60,3 +60,18 @@ runtime compile on first use.
 
 The official baseline recovered the expected label set for every fixture and
 uses the same JSON schema as the MLX reports.
+
+## Swift Tokenizer Baseline
+
+The SwiftPM target `PrivacyFilterTokenizer` loads the official Hugging Face
+`tokenizer.json` and implements the byte-level BPE tokenizer path needed by
+`openai/privacy-filter`.
+
+`swift test` passed against `tests/PrivacyFilterTokenizerTests/Resources/tokenizer_baseline_128.json`.
+The fixture was generated from the Python Transformers tokenizer and covers:
+
+- all privacy sample texts at `max_length=128`
+- padded `input_ids`
+- `attention_mask`
+- tokenizer offset mappings
+- an extra Unicode scalar offset sample with non-ASCII text and emoji
