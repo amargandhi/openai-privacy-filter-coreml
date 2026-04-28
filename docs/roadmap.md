@@ -9,6 +9,7 @@ runtime component?"
 - Fixed 128-token Core ML package.
 - Core ML vs Transformers parity report.
 - Core ML vs MLX BF16 and MXFP8 parity reports.
+- Core ML vs MLX benchmark harness and first 128-token performance snapshot.
 - Official Transformers fixture baseline.
 - Swift tokenizer and offset handling.
 
@@ -43,12 +44,12 @@ scan(text: String) throws -> [PrivacySpan]
 
 ### Performance
 
-Correctness came first. Performance should be measured next.
+Correctness came first. The first benchmark is now in `docs/results.md`: the
+dense Core ML package is accurate, but slower than MLX BF16 and much slower than
+MLX MXFP8. That points at the real work.
 
-Measure:
+Next measure:
 
-- cold load time
-- warm latency
 - peak memory
 - package size
 - compute unit choice: `.all`, `.cpuAndGPU`, `.cpuAndNeuralEngine`

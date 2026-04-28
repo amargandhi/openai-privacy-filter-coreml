@@ -58,6 +58,20 @@ This is mathematically useful for parity. It is not the final performance
 strategy. A production path should either find an exportable sparse
 decomposition or use a custom Core ML-friendly expert implementation.
 
+## Performance Read
+
+The first Core ML vs MLX benchmark confirms the tradeoff. At sequence length
+128, the dense Core ML package matches MLX decisions on the fixture set, but it
+does more work than the original sparse architecture. Warm latency was about 2x
+MLX BF16 and about 5.75x MLX MXFP8 on the local Apple Silicon test machine.
+
+That makes the next optimization target narrow:
+
+1. Keep the existing tokenizer, mask, and parity tests as the correctness rail.
+2. Replace the dense expert proof with an exportable sparse or Core ML-native
+   expert block.
+3. Re-run the same benchmark across compute units and sequence lengths.
+
 ## MLX Loader
 
 The public MLX checkpoints exist, but `mlx-embeddings` 0.1.0 does not register

@@ -133,6 +133,19 @@ python scripts/run_mlx_privacy_filter.py \
   --json-out reports/mlx-mxfp8-128.json
 ```
 
+Benchmark Core ML against an MLX checkpoint:
+
+```bash
+python scripts/benchmark_coreml_mlx.py \
+  --coreml-model build/OpenAIPrivacyFilterLogits_128_dense.mlpackage \
+  --mlx-model mlx-community/openai-privacy-filter-bf16 \
+  --fixtures fixtures/privacy_samples.json \
+  --sequence-length 128 \
+  --warmup 3 \
+  --iterations 10 \
+  --json-out reports/benchmark-coreml-vs-mlx-bf16-128.json
+```
+
 Run Swift tokenizer tests:
 
 ```bash
@@ -157,8 +170,8 @@ app can build it from the tokenizer padding mask and the model `sliding_window`.
 ## Limitations
 
 - The current Core ML proof uses `--expert-mode dense`. It computes every expert
-  and masks the router top-k result. This is good for correctness, but it is not
-  the final performance path.
+  and masks the router top-k result. This is good for correctness, but it is
+  slower than MLX today and is not the final performance path.
 - The generated 128-token package is large, roughly the size of the public model
   weights. This repo intentionally does not commit it.
 - Shape support is fixed today. Enumerated shapes and longer chunks are the next
@@ -173,6 +186,7 @@ app can build it from the tokenizer padding mask and the model `sliding_window`.
 - `scripts/convert_privacy_filter_coreml.py`: Core ML conversion entry point.
 - `scripts/compare_coreml_logits.py`: Core ML vs Transformers logits.
 - `scripts/compare_coreml_mlx_logits.py`: Core ML vs MLX logits.
+- `scripts/benchmark_coreml_mlx.py`: Core ML vs MLX latency and parity snapshot.
 - `scripts/run_transformers_privacy_filter.py`: official Python fixture baseline.
 - `scripts/run_mlx_privacy_filter.py`: MLX fixture baseline.
 - `Sources/PrivacyFilterTokenizer`: Swift tokenizer package.
