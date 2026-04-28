@@ -1,0 +1,16 @@
+.DS_Store
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+*.mlpackage/
+*.mlmodelc/
+*.mlmodel
+models/
+reports/
+*.jsonl
+*.log

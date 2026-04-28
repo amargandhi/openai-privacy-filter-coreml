@@ -1,0 +1,37 @@
+[
+  {
+    "id": "person_address_email",
+    "text": "Alice Smith lives at 123 Main Street and uses alice@example.com",
+    "expected_labels": ["private_person", "private_address", "private_email"]
+  },
+  {
+    "id": "secret",
+    "text": "Use API key sk-abcdefghijklmnopqrstuvwxyz123456 for this request",
+    "expected_labels": ["secret"]
+  },
+  {
+    "id": "phone_date",
+    "text": "Call me at +44 20 7946 0958 on 2026-04-23.",
+    "expected_labels": ["private_phone", "private_date"]
+  },
+  {
+    "id": "account_number",
+    "text": "Account number 1234-5678-9012 should never be shared.",
+    "expected_labels": ["account_number"]
+  },
+  {
+    "id": "benign_url_negative",
+    "text": "The portal is https://intranet.example.com/login for all staff.",
+    "expected_labels": []
+  },
+  {
+    "id": "unicode_offsets",
+    "text": "Maya Chen met Zoe in London. Email maya.chen@example.com before 18 September 2026.",
+    "expected_labels": ["private_person", "private_email", "private_date"]
+  },
+  {
+    "id": "code_secret",
+    "text": "export OPENAI_API_KEY='sk-proj-abc123abc123abc123abc123abc123abc123'",
+    "expected_labels": ["secret"]
+  }
+]

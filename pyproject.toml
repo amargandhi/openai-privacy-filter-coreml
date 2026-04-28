@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openai-privacy-filter-coreml"
+version = "0.1.0"
+description = "Core ML conversion and parity tooling for openai/privacy-filter"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Spatial Duality" }]
+dependencies = [
+  "numpy>=1.26",
+  "huggingface-hub>=0.28",
+]
+
+[project.optional-dependencies]
+convert = [
+  "coremltools>=8.0",
+  "torch>=2.5",
+  "transformers>=5.6",
+  "tokenizers>=0.21",
+]
+mlx = [
+  "mlx>=0.21",
+  "mlx-embeddings>=0.1.1",
+]
+onnx = [
+  "onnx>=1.16",
+  "onnxruntime>=1.20",
+]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.8",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
