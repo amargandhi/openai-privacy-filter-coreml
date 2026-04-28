@@ -1,21 +1,50 @@
 # OpenAI Privacy Filter Core ML
 
-Core ML conversion and validation tooling for `openai/privacy-filter`.
+Run `openai/privacy-filter` on Apple platforms with Core ML.
 
-The goal is a native Apple runtime artifact that Manifold and other macOS/iOS apps can use without a Python privacy-filter subprocess. The Core ML model should only emit token-classification logits. Tokenization, BIOES/Viterbi decoding, offset mapping, redaction, and policy remain in the host app.
+This repository is a small, reproducible conversion lab. It takes the public
+OpenAI Privacy Filter model from Hugging Face, converts the neural forward pass
+to a Core ML package, and checks the result against three reference paths:
+Transformers, MLX BF16, and MLX MXFP8.
 
-## Status
+The useful mental model is:
 
-- No public Core ML conversion found as of 2026-04-28.
-- Official Hugging Face artifacts exist, including tokenizer, `viterbi_calibration.json`, safetensors weights, and ONNX variants.
-- MLX community conversions exist for BF16 and MXFP8.
-- Fixed-shape Core ML export is proven at sequence lengths 16 and 128 using `--mask-mode 4d`, `--export-method export`, and `--expert-mode dense`.
-- 128-token Core ML parity reports show `argmax_agreement: 1.0` across all fixtures against the source model, MLX BF16, and MLX MXFP8.
-- This repo does not vendor model weights or generated `.mlpackage` artifacts.
+```text
+text -> tokenizer -> token ids -> Core ML logits -> BIOES/Viterbi decode -> spans
+```
 
-## Quick Start
+Core ML only does the neural network. Tokenization, offsets, decoding, redaction,
+policy, and UI stay in the host app where they are easier to inspect and test.
 
-Use Python 3.12 or earlier for conversion. The current Core ML Tools install docs list wheels through Python 3.12 for version 8.0.
+## What Works
+
+- Fixed-shape Core ML export at sequence lengths 16 and 128.
+- 128-token parity with the source Transformers model: token argmax agreement is
+  1.0 on every fixture.
+- 128-token parity with MLX BF16 and MXFP8 checkpoints: token argmax agreement is
+  1.0 on every fixture.
+- Swift byte-level BPE tokenizer with offset parity against the official Python
+  tokenizer fixtures.
+- Python BIOES and constrained Viterbi decoding helpers.
+
+The repo does not store model weights or generated `.mlpackage` files. Those are
+large artifacts that should be generated locally from pinned upstream revisions.
+
+## Why This Exists
+
+The privacy filter is useful in desktop and mobile apps, but a Python or server
+side model path is awkward for local-first software. Apple platforms already have
+a native model runtime in Core ML. The interesting question is whether we can
+make the model boring: deterministic conversion, explicit provenance, and parity
+tests that fail loudly.
+
+This repo is not an official OpenAI or Apple project. It is an engineering
+bridge for people who want to run the public model locally on macOS or iOS.
+
+## Install
+
+Use macOS on Apple Silicon. Python 3.12 is the current least surprising choice
+for Core ML Tools, Torch, Transformers, and MLX in this repo.
 
 ```bash
 python3.12 -m venv .venv
@@ -24,20 +53,63 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[convert,mlx,dev]"
 ```
 
-Check the local environment:
+Check the environment:
 
 ```bash
 python scripts/check_environment.py --profile convert
 python scripts/check_environment.py --profile mlx
 ```
 
-Run the MLX metadata/inference smoke path after dependencies are installed:
+## Convert
+
+The proven path uses a fixed shape, a precomputed 4D attention mask, and an
+export-friendly dense expert patch:
 
 ```bash
-python scripts/run_mlx_privacy_filter.py \
-  --model mlx-community/openai-privacy-filter-mxfp8 \
+python scripts/convert_privacy_filter_coreml.py \
+  --model-id openai/privacy-filter \
+  --sequence-length 128 \
+  --mask-mode 4d \
+  --export-method export \
+  --expert-mode dense \
+  --output build/OpenAIPrivacyFilterLogits_128_dense.mlpackage
+```
+
+The script writes a sidecar provenance file next to the generated package. It
+records the upstream model revision, tool versions, shape, precision, and a hash
+of the conversion recipe.
+
+## Validate
+
+Compare Core ML logits with the source Transformers model:
+
+```bash
+python scripts/compare_coreml_logits.py \
+  --model-id openai/privacy-filter \
+  --coreml-model build/OpenAIPrivacyFilterLogits_128_dense.mlpackage \
   --fixtures fixtures/privacy_samples.json \
-  --json-out reports/mlx-mxfp8.json
+  --sequence-length 128 \
+  --mask-mode 4d \
+  --expert-mode dense \
+  --json-out reports/coreml-128-dense-parity.json
+```
+
+Compare the same Core ML package with MLX checkpoints:
+
+```bash
+python scripts/compare_coreml_mlx_logits.py \
+  --mlx-model mlx-community/openai-privacy-filter-bf16 \
+  --coreml-model build/OpenAIPrivacyFilterLogits_128_dense.mlpackage \
+  --fixtures fixtures/privacy_samples.json \
+  --sequence-length 128 \
+  --json-out reports/coreml-vs-mlx-bf16-128.json
+
+python scripts/compare_coreml_mlx_logits.py \
+  --mlx-model mlx-community/openai-privacy-filter-mxfp8 \
+  --coreml-model build/OpenAIPrivacyFilterLogits_128_dense.mlpackage \
+  --fixtures fixtures/privacy_samples.json \
+  --sequence-length 128 \
+  --json-out reports/coreml-vs-mlx-mxfp8-128.json
 ```
 
 Run the official Transformers fixture baseline:
@@ -51,97 +123,76 @@ python scripts/run_transformers_privacy_filter.py \
   --json-out reports/transformers-viterbi-128.json
 ```
 
-Run the Swift tokenizer parity tests:
+Run the MLX fixture baseline:
+
+```bash
+python scripts/run_mlx_privacy_filter.py \
+  --model mlx-community/openai-privacy-filter-mxfp8 \
+  --fixtures fixtures/privacy_samples.json \
+  --max-length 128 \
+  --json-out reports/mlx-mxfp8-128.json
+```
+
+Run Swift tokenizer tests:
 
 ```bash
 swift test
 ```
 
-The Swift test target looks for `OPENAI_PRIVACY_FILTER_TOKENIZER_JSON` first, then
-falls back to the local Hugging Face cache path for the pinned
-`openai/privacy-filter` revision.
+The Swift test target uses `OPENAI_PRIVACY_FILTER_TOKENIZER_JSON` if set. If it
+is not set, it falls back to the pinned Hugging Face cache path for
+`openai/privacy-filter`.
 
-Attempt a small fixed-shape Core ML conversion first:
+## Artifact Contract
 
-```bash
-python scripts/convert_privacy_filter_coreml.py \
-  --model-id openai/privacy-filter \
-  --sequence-length 128 \
-  --mask-mode 4d \
-  --export-method export \
-  --expert-mode dense \
-  --output build/OpenAIPrivacyFilterLogits_128.mlpackage
-```
-
-Compare PyTorch and Core ML logits:
-
-```bash
-python scripts/compare_coreml_logits.py \
-  --model-id openai/privacy-filter \
-  --coreml-model build/OpenAIPrivacyFilterLogits_128.mlpackage \
-  --fixtures fixtures/privacy_samples.json \
-  --sequence-length 128 \
-  --mask-mode 4d \
-  --expert-mode dense \
-  --json-out reports/coreml-128-parity.json
-```
-
-Compare Core ML against the MLX community checkpoints:
-
-```bash
-python scripts/compare_coreml_mlx_logits.py \
-  --mlx-model mlx-community/openai-privacy-filter-bf16 \
-  --coreml-model build/OpenAIPrivacyFilterLogits_128.mlpackage \
-  --fixtures fixtures/privacy_samples.json \
-  --sequence-length 128 \
-  --json-out reports/coreml-vs-mlx-bf16-128.json
-
-python scripts/compare_coreml_mlx_logits.py \
-  --mlx-model mlx-community/openai-privacy-filter-mxfp8 \
-  --coreml-model build/OpenAIPrivacyFilterLogits_128.mlpackage \
-  --fixtures fixtures/privacy_samples.json \
-  --sequence-length 128 \
-  --json-out reports/coreml-vs-mlx-mxfp8-128.json
-```
-
-## Target Artifact
-
-`OpenAIPrivacyFilterLogits.mlpackage`
-
-Inputs:
+The target Core ML package is intentionally simple:
 
 - `input_ids`: `int32`, shape `[1, sequence_length]`
-- `attention_mask`: either tokenizer mask `int32` shape `[1, sequence_length]` or precomputed additive mask `float32` shape `[1, 1, sequence_length, sequence_length]`
-
-Output:
-
+- `attention_mask`: `float32`, shape `[1, 1, sequence_length, sequence_length]`
 - `logits`: `float16` or `float32`, shape `[1, sequence_length, 33]`
 
-The first conversion should use fixed shapes (`128`, then `512`). Enumerated shapes can follow once small-shape conversion and parity are proven.
+The 4D attention mask is an additive bidirectional sliding-window mask. A host
+app can build it from the tokenizer padding mask and the model `sliding_window`.
 
-The current conversion default uses a precomputed 4D additive attention mask (`--mask-mode 4d`) instead of the tokenizer's 2D mask. This avoids a Transformers 5.7 TorchScript tracing issue in the bidirectional sliding-window mask helper. A production host can generate the same 4D mask from token padding plus the model's `sliding_window`.
+## Limitations
 
-The upstream sparse MoE expert loop is data-dependent, which blocks `torch.export`. `--expert-mode dense` patches the expert block to compute every expert and mask/sum the router top-k experts. This proves Core ML conversion feasibility and parity, but a performant production path still needs a sparse or custom decomposition.
+- The current Core ML proof uses `--expert-mode dense`. It computes every expert
+  and masks the router top-k result. This is good for correctness, but it is not
+  the final performance path.
+- The generated 128-token package is large, roughly the size of the public model
+  weights. This repo intentionally does not commit it.
+- Shape support is fixed today. Enumerated shapes and longer chunks are the next
+  step.
+- The Swift tokenizer is present. Swift BIOES/Viterbi decode is still in Python
+  and is the next native runtime piece.
+- A privacy classifier is not a privacy guarantee. Apps still need policy,
+  auditability, fallbacks, and careful UX.
 
-The MLX fixture scripts use a project-local `openai_privacy_filter` MLX implementation because `mlx-embeddings` 0.1.0 does not register this model type. Its RoPE implementation intentionally follows the Transformers privacy-filter YaRN formula, including `truncate: false`.
+## Repository Map
 
-## Work Plan
+- `scripts/convert_privacy_filter_coreml.py`: Core ML conversion entry point.
+- `scripts/compare_coreml_logits.py`: Core ML vs Transformers logits.
+- `scripts/compare_coreml_mlx_logits.py`: Core ML vs MLX logits.
+- `scripts/run_transformers_privacy_filter.py`: official Python fixture baseline.
+- `scripts/run_mlx_privacy_filter.py`: MLX fixture baseline.
+- `Sources/PrivacyFilterTokenizer`: Swift tokenizer package.
+- `src/privacy_filter_coreml`: Python decode, Viterbi, MLX loader, and conversion helpers.
+- `fixtures/privacy_samples.json`: small human-readable validation samples.
+- `docs/results.md`: current measurements and parity numbers.
+- `docs/technical-notes.md`: conversion details and known blockers.
+- `docs/roadmap.md`: public project direction.
 
-1. Prove PyTorch-to-Core ML conversion at fixed shape 128. Done.
-2. Compare PyTorch vs Core ML logits on fixtures. Done.
-3. Run MLX BF16/MXFP8 fixture inference for baseline behavior. Done.
-4. Add an official Transformers fixture baseline. Done.
-5. Port tokenizer and offset handling to Swift. Done.
-6. Port BIOES/Viterbi decode to Swift.
-7. Add a `CoreMLPrivacyBackend` in Manifold that conforms to the existing `PrivacyBackend` protocol.
-8. Benchmark compute units and sequence lengths.
-9. Add provenance records for model revision, Core ML Tools version, Torch version, Transformers version, shape set, precision, and conversion hash.
+## Docs
+
+- [Results](docs/results.md)
+- [Technical notes](docs/technical-notes.md)
+- [Roadmap](docs/roadmap.md)
 
 ## References
 
-- OpenAI release: https://openai.com/index/introducing-openai-privacy-filter/
-- Hugging Face model: https://huggingface.co/openai/privacy-filter
-- Official ONNX artifacts: https://huggingface.co/openai/privacy-filter/tree/main/onnx
-- MLX BF16: https://huggingface.co/mlx-community/openai-privacy-filter-bf16
-- Core ML PyTorch conversion: https://apple.github.io/coremltools/docs-guides/source/convert-pytorch-workflow.html
-- Core ML ML Program docs: https://apple.github.io/coremltools/docs-guides/source/convert-to-ml-program.html
+- [OpenAI Privacy Filter announcement](https://openai.com/index/introducing-openai-privacy-filter/)
+- [Hugging Face model](https://huggingface.co/openai/privacy-filter)
+- [Official ONNX artifacts](https://huggingface.co/openai/privacy-filter/tree/main/onnx)
+- [MLX BF16 checkpoint](https://huggingface.co/mlx-community/openai-privacy-filter-bf16)
+- [MLX MXFP8 checkpoint](https://huggingface.co/mlx-community/openai-privacy-filter-mxfp8)
+- [Core ML PyTorch conversion guide](https://apple.github.io/coremltools/docs-guides/source/convert-pytorch-workflow.html)

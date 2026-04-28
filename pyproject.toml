@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "openai-privacy-filter-coreml"
 version = "0.1.0"
-description = "Core ML conversion and parity tooling for openai/privacy-filter"
+description = "Core ML conversion, validation, and Swift runtime helpers for openai/privacy-filter"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 license = { text = "Apache-2.0" }
