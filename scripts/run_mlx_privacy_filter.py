@@ -21,22 +21,39 @@ def parse_args() -> argparse.Namespace:
 def require_dependencies():
     try:
         import mlx.core as mx
-        from mlx_embeddings.utils import load
+        from mlx_embeddings.tokenizer_utils import load_tokenizer
+        from mlx_embeddings.utils import get_model_path, load_model
     except ImportError as exc:
         raise SystemExit(
             "Missing MLX dependencies. Install with "
             '`python -m pip install -e ".[mlx]"`.'
         ) from exc
-    return mx, load
+    return mx, get_model_path, load_model, load_tokenizer
+
+
+def load_privacy_filter_model(model_ref: str, get_model_path, load_model, load_tokenizer):
+    from privacy_filter_coreml.mlx_openai_privacy_filter import Model, ModelArgs
+
+    def get_model_classes(config):
+        return Model, ModelArgs, None, None
+
+    model_path = get_model_path(model_ref)
+    model = load_model(
+        model_path,
+        get_model_classes=get_model_classes,
+        path_to_repo=model_ref,
+    )
+    tokenizer = load_tokenizer(model_path, {})
+    return model, tokenizer
 
 
 def main() -> int:
     args = parse_args()
-    mx, load = require_dependencies()
+    mx, get_model_path, load_model, load_tokenizer = require_dependencies()
     fixtures = json.loads(args.fixtures.read_text(encoding="utf-8"))
 
     started_load = perf_counter()
-    model, tokenizer = load(args.model)
+    model, tokenizer = load_privacy_filter_model(args.model, get_model_path, load_model, load_tokenizer)
     load_ms = (perf_counter() - started_load) * 1000.0
     id2label = model.config.id2label
 

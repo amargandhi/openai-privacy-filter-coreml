@@ -15,6 +15,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--coreml-model", type=Path, required=True)
     parser.add_argument("--fixtures", type=Path, default=Path("fixtures/privacy_samples.json"))
     parser.add_argument("--sequence-length", type=int, default=128)
+    parser.add_argument("--mask-mode", choices=["2d", "4d"], default="4d")
+    parser.add_argument("--expert-mode", choices=["eager", "dense"], default="eager")
     parser.add_argument("--json-out", type=Path)
     parser.add_argument("--trust-remote-code", action="store_true")
     return parser.parse_args()
@@ -36,6 +38,10 @@ def require_dependencies():
 def main() -> int:
     args = parse_args()
     ct, torch, AutoModelForTokenClassification, AutoTokenizer = require_dependencies()
+    if args.expert_mode == "dense":
+        from privacy_filter_coreml.transformers_patch import patch_openai_privacy_filter_dense_experts
+
+        patch_openai_privacy_filter_dense_experts()
     fixtures = json.loads(args.fixtures.read_text(encoding="utf-8"))
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_id, trust_remote_code=args.trust_remote_code)
@@ -58,7 +64,15 @@ def main() -> int:
             max_length=args.sequence_length,
         )
         input_ids = encoded["input_ids"].to(torch.int32)
-        attention_mask = encoded["attention_mask"].to(torch.int32)
+        attention_mask_2d = encoded["attention_mask"].to(torch.int32)
+        if args.mask_mode == "4d":
+            attention_mask = make_4d_attention_mask(
+                torch,
+                attention_mask_2d,
+                sliding_window=int(torch_model.config.sliding_window),
+            )
+        else:
+            attention_mask = attention_mask_2d
 
         started = perf_counter()
         with torch.no_grad():
@@ -71,14 +85,14 @@ def main() -> int:
 
         coreml_inputs = {
             "input_ids": input_ids.numpy().astype(np.int32),
-            "attention_mask": attention_mask.numpy().astype(np.int32),
+            "attention_mask": attention_mask.numpy().astype(np.float32 if args.mask_mode == "4d" else np.int32),
         }
         started = perf_counter()
         prediction = coreml_model.predict(coreml_inputs)
         coreml_ms = (perf_counter() - started) * 1000.0
         coreml_logits = np.asarray(prediction["logits"])
 
-        non_padding = attention_mask.numpy().astype(bool)
+        non_padding = attention_mask_2d.numpy().astype(bool)
         abs_diff = np.abs(torch_logits - coreml_logits)
         torch_argmax = np.argmax(torch_logits, axis=-1)
         coreml_argmax = np.argmax(coreml_logits, axis=-1)
@@ -98,6 +112,8 @@ def main() -> int:
         "model_id": args.model_id,
         "coreml_model": str(args.coreml_model),
         "sequence_length": args.sequence_length,
+        "mask_mode": args.mask_mode,
+        "expert_mode": args.expert_mode,
         "results": results,
     }
     if args.json_out:
@@ -105,6 +121,20 @@ def main() -> int:
         args.json_out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
+
+
+def make_4d_attention_mask(torch, attention_mask_2d, sliding_window: int):
+    batch_size, sequence_length = attention_mask_2d.shape
+    positions = torch.arange(sequence_length, device=attention_mask_2d.device)
+    local = torch.abs(positions[:, None] - positions[None, :]) <= sliding_window
+    key_padding = attention_mask_2d.to(torch.bool)[:, None, None, :]
+    allowed = local[None, None, :, :] & key_padding
+    dtype = torch.float32
+    return torch.where(
+        allowed,
+        torch.tensor(0.0, device=attention_mask_2d.device, dtype=dtype),
+        torch.tensor(torch.finfo(dtype).min, device=attention_mask_2d.device, dtype=dtype),
+    ).expand(batch_size, 1, sequence_length, sequence_length)
 
 
 if __name__ == "__main__":

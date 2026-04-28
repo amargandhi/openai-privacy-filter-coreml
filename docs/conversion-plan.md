@@ -22,27 +22,31 @@ This keeps Core ML conversion small and lets Manifold preserve its existing `Pri
 
 ## Conversion Path
 
-Primary path:
+Proven path:
 
 1. Load `AutoModelForTokenClassification.from_pretrained("openai/privacy-filter")`.
 2. Wrap forward to return only `logits`.
 3. Disable cache and return dictionaries.
-4. Trace or export a fixed-shape graph.
-5. Convert with Core ML Tools Unified Conversion API as an ML Program.
-6. Save `.mlpackage`.
-7. Compare logits against PyTorch.
+4. Use a precomputed 4D additive sliding-window attention mask.
+5. Patch the sparse MoE block into a dense all-expert computation for export.
+6. Export a fixed-shape graph with `torch.export.export`.
+7. Convert with Core ML Tools Unified Conversion API as an ML Program.
+8. Save `.mlpackage` plus a provenance sidecar.
+9. Compare logits against PyTorch and MLX BF16/MXFP8.
 
-Fallback path:
+Observed blockers:
 
-- Try `torch.export.export` if TorchScript tracing fails.
-- Use ONNX only as a reference or last-resort experiment.
+- TorchScript tracing with the normal 2D tokenizer mask fails in the Transformers bidirectional sliding-window mask helper.
+- `torch.export.export` of the upstream sparse MoE loop fails on data-dependent expert routing.
+- The dense expert patch proves conversion and parity, but it is not the production performance target.
+- `mlx-embeddings` 0.1.0 does not register `openai_privacy_filter`, so MLX fixture tests use a project-local model class.
 
 ## First Milestones
 
 1. Environment proof: Python 3.12, Torch, Transformers 5.6+, Core ML Tools.
-2. Fixed 128-token `.mlpackage`.
-3. PyTorch vs Core ML logit parity report.
-4. MLX MXFP8 fixture output report.
+2. Fixed 128-token `.mlpackage`. Done.
+3. PyTorch vs Core ML logit parity report. Done.
+4. MLX BF16/MXFP8 fixture output reports. Done.
 5. Fixed 512-token `.mlpackage`.
 6. Enumerated-shape conversion.
 7. Swift tokenizer/Viterbi port.

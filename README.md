@@ -9,7 +9,9 @@ The goal is a native Apple runtime artifact that Manifold and other macOS/iOS ap
 - No public Core ML conversion found as of 2026-04-28.
 - Official Hugging Face artifacts exist, including tokenizer, `viterbi_calibration.json`, safetensors weights, and ONNX variants.
 - MLX community conversions exist for BF16 and MXFP8.
-- This repo starts with conversion/parity tooling. It does not vendor model weights.
+- Fixed-shape Core ML export is proven at sequence lengths 16 and 128 using `--mask-mode 4d`, `--export-method export`, and `--expert-mode dense`.
+- 128-token Core ML parity reports show `argmax_agreement: 1.0` across all fixtures against the source model, MLX BF16, and MLX MXFP8.
+- This repo does not vendor model weights or generated `.mlpackage` artifacts.
 
 ## Quick Start
 
@@ -25,7 +27,8 @@ python -m pip install -e ".[convert,mlx,dev]"
 Check the local environment:
 
 ```bash
-python scripts/check_environment.py
+python scripts/check_environment.py --profile convert
+python scripts/check_environment.py --profile mlx
 ```
 
 Run the MLX metadata/inference smoke path after dependencies are installed:
@@ -43,6 +46,9 @@ Attempt a small fixed-shape Core ML conversion first:
 python scripts/convert_privacy_filter_coreml.py \
   --model-id openai/privacy-filter \
   --sequence-length 128 \
+  --mask-mode 4d \
+  --export-method export \
+  --expert-mode dense \
   --output build/OpenAIPrivacyFilterLogits_128.mlpackage
 ```
 
@@ -54,7 +60,27 @@ python scripts/compare_coreml_logits.py \
   --coreml-model build/OpenAIPrivacyFilterLogits_128.mlpackage \
   --fixtures fixtures/privacy_samples.json \
   --sequence-length 128 \
+  --mask-mode 4d \
+  --expert-mode dense \
   --json-out reports/coreml-128-parity.json
+```
+
+Compare Core ML against the MLX community checkpoints:
+
+```bash
+python scripts/compare_coreml_mlx_logits.py \
+  --mlx-model mlx-community/openai-privacy-filter-bf16 \
+  --coreml-model build/OpenAIPrivacyFilterLogits_128.mlpackage \
+  --fixtures fixtures/privacy_samples.json \
+  --sequence-length 128 \
+  --json-out reports/coreml-vs-mlx-bf16-128.json
+
+python scripts/compare_coreml_mlx_logits.py \
+  --mlx-model mlx-community/openai-privacy-filter-mxfp8 \
+  --coreml-model build/OpenAIPrivacyFilterLogits_128.mlpackage \
+  --fixtures fixtures/privacy_samples.json \
+  --sequence-length 128 \
+  --json-out reports/coreml-vs-mlx-mxfp8-128.json
 ```
 
 ## Target Artifact
@@ -64,7 +90,7 @@ python scripts/compare_coreml_logits.py \
 Inputs:
 
 - `input_ids`: `int32`, shape `[1, sequence_length]`
-- `attention_mask`: `int32`, shape `[1, sequence_length]`
+- `attention_mask`: either tokenizer mask `int32` shape `[1, sequence_length]` or precomputed additive mask `float32` shape `[1, 1, sequence_length, sequence_length]`
 
 Output:
 
@@ -72,11 +98,17 @@ Output:
 
 The first conversion should use fixed shapes (`128`, then `512`). Enumerated shapes can follow once small-shape conversion and parity are proven.
 
+The current conversion default uses a precomputed 4D additive attention mask (`--mask-mode 4d`) instead of the tokenizer's 2D mask. This avoids a Transformers 5.7 TorchScript tracing issue in the bidirectional sliding-window mask helper. A production host can generate the same 4D mask from token padding plus the model's `sliding_window`.
+
+The upstream sparse MoE expert loop is data-dependent, which blocks `torch.export`. `--expert-mode dense` patches the expert block to compute every expert and mask/sum the router top-k experts. This proves Core ML conversion feasibility and parity, but a performant production path still needs a sparse or custom decomposition.
+
+The MLX fixture scripts use a project-local `openai_privacy_filter` MLX implementation because `mlx-embeddings` 0.1.0 does not register this model type. Its RoPE implementation intentionally follows the Transformers privacy-filter YaRN formula, including `truncate: false`.
+
 ## Work Plan
 
-1. Prove PyTorch-to-Core ML conversion at fixed shape 128.
-2. Compare PyTorch vs Core ML logits on fixtures.
-3. Run MLX BF16/MXFP8 fixture inference for baseline behavior.
+1. Prove PyTorch-to-Core ML conversion at fixed shape 128. Done.
+2. Compare PyTorch vs Core ML logits on fixtures. Done.
+3. Run MLX BF16/MXFP8 fixture inference for baseline behavior. Done.
 4. Implement or port tokenizer and Viterbi decode in Swift.
 5. Add a `CoreMLPrivacyBackend` in Manifold that conforms to the existing `PrivacyBackend` protocol.
 6. Benchmark compute units and sequence lengths.

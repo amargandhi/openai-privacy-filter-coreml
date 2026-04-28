@@ -24,7 +24,7 @@ convert = [
 ]
 mlx = [
   "mlx>=0.21",
-  "mlx-embeddings>=0.1.1",
+  "mlx-embeddings>=0.1.0",
 ]
 onnx = [
   "onnx>=1.16",
