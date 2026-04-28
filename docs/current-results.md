@@ -45,3 +45,18 @@ Both MLX community checkpoints recovered the expected label set for every
 
 The first decoded run is slower because the MLX/Metal kernels and Core ML model
 runtime compile on first use.
+
+## Official Transformers Baseline
+
+`scripts/run_transformers_privacy_filter.py` generated
+`reports/transformers-viterbi-128.json` using:
+
+- `model`: `openai/privacy-filter`
+- `decode`: `viterbi`
+- `max_length`: 128
+- `torch_dtype`: `float32`
+- `viterbi_calibration`: Hugging Face `viterbi_calibration.json` from revision
+  `7ffa9a043d54d1be65afb281eddf0ffbe629385b`
+
+The official baseline recovered the expected label set for every fixture and
+uses the same JSON schema as the MLX reports.

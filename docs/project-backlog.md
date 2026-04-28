@@ -23,6 +23,7 @@ These items are intended to become GitHub issues and Project items.
 
 6. Add official CLI/Transformers fixture baseline
    - Acceptance: PyTorch or official OPF output is stored in the same JSON schema.
+   - Status: Done with `scripts/run_transformers_privacy_filter.py`.
 
 ## Milestone 3: Native Runtime
 

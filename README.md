@@ -40,6 +40,17 @@ python scripts/run_mlx_privacy_filter.py \
   --json-out reports/mlx-mxfp8.json
 ```
 
+Run the official Transformers fixture baseline:
+
+```bash
+python scripts/run_transformers_privacy_filter.py \
+  --model-id openai/privacy-filter \
+  --fixtures fixtures/privacy_samples.json \
+  --max-length 128 \
+  --decode viterbi \
+  --json-out reports/transformers-viterbi-128.json
+```
+
 Attempt a small fixed-shape Core ML conversion first:
 
 ```bash
@@ -109,10 +120,11 @@ The MLX fixture scripts use a project-local `openai_privacy_filter` MLX implemen
 1. Prove PyTorch-to-Core ML conversion at fixed shape 128. Done.
 2. Compare PyTorch vs Core ML logits on fixtures. Done.
 3. Run MLX BF16/MXFP8 fixture inference for baseline behavior. Done.
-4. Implement or port tokenizer and Viterbi decode in Swift.
-5. Add a `CoreMLPrivacyBackend` in Manifold that conforms to the existing `PrivacyBackend` protocol.
-6. Benchmark compute units and sequence lengths.
-7. Add provenance records for model revision, Core ML Tools version, Torch version, Transformers version, shape set, precision, and conversion hash.
+4. Add an official Transformers fixture baseline. Done.
+5. Implement or port tokenizer and Viterbi decode in Swift.
+6. Add a `CoreMLPrivacyBackend` in Manifold that conforms to the existing `PrivacyBackend` protocol.
+7. Benchmark compute units and sequence lengths.
+8. Add provenance records for model revision, Core ML Tools version, Torch version, Transformers version, shape set, precision, and conversion hash.
 
 ## References
 
