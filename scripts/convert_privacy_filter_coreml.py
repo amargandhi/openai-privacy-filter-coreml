@@ -14,6 +14,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--model-id", default="openai/privacy-filter")
     parser.add_argument("--sequence-length", type=int, default=128)
+    parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--precision", choices=["fp16", "fp32"], default="fp16")
     parser.add_argument("--torch-dtype", choices=["float32", "bfloat16"], default="float32")
@@ -64,6 +65,8 @@ def require_dependencies():
 
 def main() -> int:
     args = parse_args()
+    if args.batch_size < 1:
+        raise SystemExit("--batch-size must be >= 1")
     ct, np, torch, transformers, model_info, AutoModelForTokenClassification = require_dependencies()
     if args.expert_mode == "dense":
         from privacy_filter_coreml.transformers_patch import patch_openai_privacy_filter_dense_experts
@@ -97,10 +100,11 @@ def main() -> int:
     torch_model.eval()
     wrapped = PrivacyFilterLogits(torch_model).eval()
 
-    example_input_ids = torch.zeros((1, args.sequence_length), dtype=torch.int32)
+    example_input_ids = torch.zeros((args.batch_size, args.sequence_length), dtype=torch.int32)
     if args.mask_mode == "4d":
         example_attention_mask = make_4d_attention_mask(
             torch,
+            args.batch_size,
             args.sequence_length,
             sliding_window=int(torch_model.config.sliding_window),
             dtype=torch.float32,
@@ -112,7 +116,7 @@ def main() -> int:
 
     with torch.no_grad():
         logits = wrapped(example_input_ids, example_attention_mask)
-    if tuple(logits.shape) != (1, args.sequence_length, 33):
+    if tuple(logits.shape) != (args.batch_size, args.sequence_length, 33):
         raise SystemExit(f"Unexpected logits shape: {tuple(logits.shape)}")
 
     if args.export_method == "export":
@@ -154,15 +158,23 @@ def main() -> int:
         outputs=[ct.TensorType(name="logits")],
     )
     mlmodel.short_description = "OpenAI Privacy Filter token-classification logits"
-    mlmodel.input_description["input_ids"] = "Token IDs shaped [1, sequence_length]"
-    mlmodel.input_description["attention_mask"] = "Attention mask shaped [1, sequence_length]"
-    mlmodel.output_description["logits"] = "BIOES token classification logits shaped [1, sequence_length, 33]"
+    mlmodel.input_description["input_ids"] = "Token IDs shaped [batch_size, sequence_length]"
+    if args.mask_mode == "4d":
+        mlmodel.input_description["attention_mask"] = (
+            "Attention mask shaped [batch_size, 1, sequence_length, sequence_length]"
+        )
+    else:
+        mlmodel.input_description["attention_mask"] = "Attention mask shaped [batch_size, sequence_length]"
+    mlmodel.output_description["logits"] = (
+        "BIOES token classification logits shaped [batch_size, sequence_length, 33]"
+    )
     mlmodel.save(str(args.output))
 
     info = model_info(args.model_id)
     provenance = {
         "model_id": args.model_id,
         "model_sha": info.sha,
+        "batch_size": args.batch_size,
         "sequence_length": args.sequence_length,
         "export_method": args.export_method,
         "expert_mode": args.expert_mode,
@@ -185,7 +197,7 @@ def main() -> int:
     return 0
 
 
-def make_4d_attention_mask(torch, sequence_length: int, sliding_window: int, dtype):
+def make_4d_attention_mask(torch, batch_size: int, sequence_length: int, sliding_window: int, dtype):
     positions = torch.arange(sequence_length)
     allowed = torch.abs(positions[:, None] - positions[None, :]) <= sliding_window
     mask = torch.where(
@@ -193,7 +205,12 @@ def make_4d_attention_mask(torch, sequence_length: int, sliding_window: int, dty
         torch.tensor(0.0, dtype=dtype),
         torch.tensor(torch.finfo(dtype).min, dtype=dtype),
     )
-    return mask.reshape(1, 1, sequence_length, sequence_length)
+    return mask.reshape(1, 1, sequence_length, sequence_length).expand(
+        batch_size,
+        1,
+        sequence_length,
+        sequence_length,
+    )
 
 
 if __name__ == "__main__":

@@ -69,6 +69,7 @@ export-friendly dense expert patch:
 python scripts/convert_privacy_filter_coreml.py \
   --model-id openai/privacy-filter \
   --sequence-length 128 \
+  --batch-size 1 \
   --mask-mode 4d \
   --export-method export \
   --expert-mode dense \
@@ -141,10 +142,14 @@ python scripts/benchmark_coreml_mlx.py \
   --mlx-model mlx-community/openai-privacy-filter-bf16 \
   --fixtures fixtures/privacy_samples.json \
   --sequence-length 128 \
+  --batch-size 1 \
   --warmup 3 \
   --iterations 10 \
   --json-out reports/benchmark-coreml-vs-mlx-bf16-128.json
 ```
+
+For throughput experiments, use `--batch-size` with repeated fixtures or a
+batch-shaped package. See [Performance](docs/performance.md).
 
 Run Swift tokenizer tests:
 
@@ -176,6 +181,8 @@ app can build it from the tokenizer padding mask and the model `sliding_window`.
   weights. This repo intentionally does not commit it.
 - Shape support is fixed today. Enumerated shapes and longer chunks are the next
   step.
+- Batch-shaped exports are supported for experiments, but each batch size is a
+  separate fixed-shape package today.
 - The Swift tokenizer is present. Swift BIOES/Viterbi decode is still in Python
   and is the next native runtime piece.
 - A privacy classifier is not a privacy guarantee. Apps still need policy,
@@ -187,6 +194,7 @@ app can build it from the tokenizer padding mask and the model `sliding_window`.
 - `scripts/compare_coreml_logits.py`: Core ML vs Transformers logits.
 - `scripts/compare_coreml_mlx_logits.py`: Core ML vs MLX logits.
 - `scripts/benchmark_coreml_mlx.py`: Core ML vs MLX latency and parity snapshot.
+- `scripts/compress_coreml_model.py`: Core ML weight compression experiments.
 - `scripts/run_transformers_privacy_filter.py`: official Python fixture baseline.
 - `scripts/run_mlx_privacy_filter.py`: MLX fixture baseline.
 - `Sources/PrivacyFilterTokenizer`: Swift tokenizer package.
@@ -199,6 +207,7 @@ app can build it from the tokenizer padding mask and the model `sliding_window`.
 ## Docs
 
 - [Results](docs/results.md)
+- [Performance](docs/performance.md)
 - [Technical notes](docs/technical-notes.md)
 - [Roadmap](docs/roadmap.md)
 

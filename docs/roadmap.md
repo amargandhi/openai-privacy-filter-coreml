@@ -10,6 +10,7 @@ runtime component?"
 - Core ML vs Transformers parity report.
 - Core ML vs MLX BF16 and MXFP8 parity reports.
 - Core ML vs MLX benchmark harness and first 128-token performance snapshot.
+- Fixed batch-size conversion and microbatch benchmark support.
 - Official Transformers fixture baseline.
 - Swift tokenizer and offset handling.
 
@@ -54,6 +55,8 @@ Next measure:
 - package size
 - compute unit choice: `.all`, `.cpuAndGPU`, `.cpuAndNeuralEngine`
 - sequence lengths: 128 and 512
+- true tensor batch sizes: 2, 4, 8, and 16
+- compressed package variants: int8, int4, and palettized weights
 
 ### Smaller Or Sparse Expert Export
 

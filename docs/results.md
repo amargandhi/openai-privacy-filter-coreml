@@ -77,6 +77,27 @@ was designed as a sparse mixture-of-experts network. MLX also has an MXFP8
 checkpoint that is much smaller and faster. The next performance phase should
 attack the expert block and package shape, not the tokenizer or decoder.
 
+## Batch Throughput
+
+The first batch pass added two benchmark modes:
+
+- `api`: pass a list of batch-1 inputs through Core ML's batch prediction API.
+- `tensor`: pass a real `[batch_size, sequence_length]` tensor into a package
+  exported for that batch size.
+
+Measured snapshots:
+
+| Package | Mode | Batch | Sequence | Core ML mean/sample | MLX mean/sample | Core ML tokens/sec | MLX tokens/sec | Agreement |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `OpenAIPrivacyFilterLogits_128_dense.mlpackage` | Core ML API batch | 4 | 128 | 96.06 ms | 10.29 ms | 180 | 1,680 | 1.0 |
+| `OpenAIPrivacyFilterLogits_b2_16_dense.mlpackage` | Core ML tensor batch | 2 | 16 | 20.23 ms | 9.48 ms | 720 | 1,537 | 1.0 |
+
+The API-batch result is mainly an integration check; it did not materially beat
+the earlier single-sample Core ML latency. The tensor-batch result proves the
+batch-shaped conversion path works, but it was only validated on a small
+sequence-16 package. The next useful Core ML measurement is a true tensor-batch
+128-token package at batch sizes 2, 4, and 8.
+
 ## Fixture Baselines
 
 The official Transformers baseline recovered the expected label set for every

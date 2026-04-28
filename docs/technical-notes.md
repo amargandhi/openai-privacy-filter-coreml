@@ -65,6 +65,12 @@ The first Core ML vs MLX benchmark confirms the tradeoff. At sequence length
 does more work than the original sparse architecture. Warm latency was about 2x
 MLX BF16 and about 5.75x MLX MXFP8 on the local Apple Silicon test machine.
 
+Batching helps the scanner architecture, but it does not remove dense expert
+compute. Core ML API batching works with the existing batch-1 package, while
+tensor batching requires a package exported with the target batch size. The
+first tensor-batch smoke test passed for `[2, 16]`; the meaningful Core ML test
+is still `[2, 128]`, `[4, 128]`, and `[8, 128]`.
+
 That makes the next optimization target narrow:
 
 1. Keep the existing tokenizer, mask, and parity tests as the correctness rail.
