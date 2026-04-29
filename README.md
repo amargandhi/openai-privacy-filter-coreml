@@ -30,6 +30,20 @@ policy, and UI stay in the host app where they are easier to inspect and test.
 The repo does not store model weights or generated `.mlpackage` files. Those are
 large artifacts that should be generated locally from pinned upstream revisions.
 
+## Current Performance Read
+
+On the measured M1 Max machine, MLX MXFP8 is the clear macOS fast path: about
+`16.84 ms` per warm 128-token sample, versus `96.88 ms` for the current dense
+Core ML fp16 package. Both paths match token decisions on the fixture set, but
+Core ML is slowed down by the dense expert export. For a batch of 100 short
+emails, the practical expectation is roughly 2.5-3 seconds with MLX MXFP8 after
+warmup and roughly 9-10 seconds with the current Core ML dense package.
+
+For normal M3, M4, and M5 Macs, treat MLX MXFP8 as the recommended downloadable
+runtime for a macOS app. Core ML remains valuable for compatibility and
+packaging, but the next real speed step is sparse MoE export, not larger fixed
+batches. See the short [Mac performance summary](docs/mac-performance-summary.md).
+
 ## Why This Exists
 
 The privacy filter is useful in desktop and mobile apps, but a Python or server
@@ -208,6 +222,7 @@ app can build it from the tokenizer padding mask and the model `sliding_window`.
 
 - [Results](docs/results.md)
 - [Performance](docs/performance.md)
+- [Mac performance summary](docs/mac-performance-summary.md)
 - [Technical notes](docs/technical-notes.md)
 - [Roadmap](docs/roadmap.md)
 
