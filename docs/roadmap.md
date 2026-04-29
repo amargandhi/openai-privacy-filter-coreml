@@ -11,6 +11,8 @@ runtime component?"
 - Core ML vs MLX BF16 and MXFP8 parity reports.
 - Core ML vs MLX benchmark harness and first 128-token performance snapshot.
 - Fixed batch-size conversion and microbatch benchmark support.
+- 128-token tensor-batch sweep for batch sizes 2, 4, and 8.
+- Linear int8 and uniform 8-bit palettization compression experiments.
 - Official Transformers fixture baseline.
 - Swift tokenizer and offset handling.
 
@@ -52,16 +54,16 @@ MLX MXFP8. That points at the real work.
 Next measure:
 
 - peak memory
-- package size
 - compute unit choice: `.all`, `.cpuAndGPU`, `.cpuAndNeuralEngine`
-- sequence lengths: 128 and 512
-- true tensor batch sizes: 2, 4, 8, and 16
-- compressed package variants: int8, int4, and palettized weights
+- sequence length 512
+- sparse or split expert paths
+- higher-quality quantization recipes if package size remains a priority
 
 ### Smaller Or Sparse Expert Export
 
-The dense expert patch is the main known cost. A practical package likely needs
-one of:
+The dense expert patch is the main known cost. Batch-shaped packages and
+data-free 8-bit compression did not make the Core ML path competitive. A
+practical package likely needs one of:
 
 - an exportable sparse expert decomposition
 - a custom Core ML-friendly expert block

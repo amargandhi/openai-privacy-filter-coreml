@@ -68,8 +68,15 @@ MLX BF16 and about 5.75x MLX MXFP8 on the local Apple Silicon test machine.
 Batching helps the scanner architecture, but it does not remove dense expert
 compute. Core ML API batching works with the existing batch-1 package, while
 tensor batching requires a package exported with the target batch size. The
-first tensor-batch smoke test passed for `[2, 16]`; the meaningful Core ML test
-is still `[2, 128]`, `[4, 128]`, and `[8, 128]`.
+first tensor-batch smoke test passed for `[2, 16]`. The `[2, 128]`, `[4, 128]`,
+and `[8, 128]` sweep also preserved argmax agreement, but was slower than the
+batch-1 dense package. This points back to the dense expert block rather than
+batch shape.
+
+Data-free compression was also not a speed answer. Linear int8 halved package
+size, but failed accelerated execution and lost argmax agreement on CPU-only
+execution. Uniform 8-bit palettization kept agreement and halved package size,
+but increased warm latency.
 
 That makes the next optimization target narrow:
 

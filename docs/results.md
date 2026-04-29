@@ -98,6 +98,31 @@ batch-shaped conversion path works, but it was only validated on a small
 sequence-16 package. The next useful Core ML measurement is a true tensor-batch
 128-token package at batch sizes 2, 4, and 8.
 
+## 2026-04-29 Speed Sweep
+
+The next sweep generated true 128-token tensor-batch packages for batch sizes 2,
+4, and 8. Each package preserved token argmax agreement of `1.0` against MLX
+MXFP8, but none improved throughput.
+
+| Core ML package | Batch | Core ML mean/sample | Core ML tokens/sec | MLX mean/sample | MLX tokens/sec | Agreement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `OpenAIPrivacyFilterLogits_b2_128_dense.mlpackage` | 2 | 214.04 ms | 81 | 26.98 ms | 641 | 1.0 |
+| `OpenAIPrivacyFilterLogits_b4_128_dense.mlpackage` | 4 | 186.72 ms | 93 | 32.10 ms | 538 | 1.0 |
+| `OpenAIPrivacyFilterLogits_b8_128_dense.mlpackage` | 8 | 192.03 ms | 98 | 25.49 ms | 695 | 1.0 |
+
+Compression results were mixed:
+
+| Package | Method | Size | Accuracy | Runtime |
+| --- | --- | ---: | --- | --- |
+| `OpenAIPrivacyFilterLogits_128_dense_int8.mlpackage` | linear int8 | 1.40 GB | rejected, minimum agreement `0.27` on CPU-only smoke | accelerated execution failed with an MPSGraph MLIR error |
+| `OpenAIPrivacyFilterLogits_128_dense_palettize8_uniform.mlpackage` | uniform 8-bit palettization | 1.40 GB | agreement `1.0` | 148.97 ms/sample, slower than fp16 dense |
+
+The conclusion is not subtle: easy Core ML levers are not enough. Fixed tensor
+batching is correct but slower for this dense graph, and compression can reduce
+artifact size but does not improve latency. The next real performance path is
+to remove the dense expert patch or use MLX MXFP8 on macOS where that runtime is
+available.
+
 ## Fixture Baselines
 
 The official Transformers baseline recovered the expected label set for every

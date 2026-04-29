@@ -81,7 +81,7 @@ python scripts/benchmark_coreml_mlx.py \
   --json-out reports/benchmark-coreml-tensor-batch4-vs-mlx-mxfp8-128.json
 ```
 
-Initial measurements:
+Initial measurements from the first batch pass:
 
 | Package | Mode | Batch | Sequence | Core ML mean/sample | MLX mean/sample | Core ML tokens/sec | MLX tokens/sec |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -93,6 +93,23 @@ set. API batching is compatible with the existing package, but the 128-token
 measurement did not improve average Core ML latency. Tensor batching is the
 more important path; the next benchmark should build `[2, 128]`, `[4, 128]`,
 and `[8, 128]` packages and compare throughput.
+
+## 128-Token Tensor Batch Sweep
+
+The 2026-04-29 sweep generated fixed tensor-batch packages for batch sizes 2, 4,
+and 8 at sequence length 128. Each package was benchmarked against MLX MXFP8
+with `--repeat-fixtures 4`, `--warmup 2`, and `--iterations 5`.
+
+| Package | Batch | Core ML mean/sample | Core ML p50/sample | Core ML tokens/sec | MLX mean/sample | MLX tokens/sec | Agreement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `OpenAIPrivacyFilterLogits_b2_128_dense.mlpackage` | 2 | 214.04 ms | 225.82 ms | 81 | 26.98 ms | 641 | 1.0 |
+| `OpenAIPrivacyFilterLogits_b4_128_dense.mlpackage` | 4 | 186.72 ms | 195.78 ms | 93 | 32.10 ms | 538 | 1.0 |
+| `OpenAIPrivacyFilterLogits_b8_128_dense.mlpackage` | 8 | 192.03 ms | 155.54 ms | 98 | 25.49 ms | 695 | 1.0 |
+
+Tensor batching did not make the dense Core ML graph faster. The outputs still
+match MLX decisions, but the dense expert patch dominates runtime and scales
+poorly with batch size. This rules out fixed batch shape as the main speed lever
+for the current dense export.
 
 ## Compression Experiments
 
@@ -115,6 +132,18 @@ python scripts/compare_coreml_mlx_logits.py \
   --sequence-length 128 \
   --json-out reports/coreml-int8-vs-mlx-mxfp8-128.json
 ```
+
+The 2026-04-29 compression sweep tried two data-free 8-bit methods:
+
+| Package | Method | Size | Result |
+| --- | --- | ---: | --- |
+| `OpenAIPrivacyFilterLogits_128_dense_int8.mlpackage` | linear int8 | 1.40 GB | Rejected. It is 2.0x smaller, but the accelerated backend failed with an MPSGraph MLIR error. CPU-only execution worked, but fixture agreement fell to `0.27`. |
+| `OpenAIPrivacyFilterLogits_128_dense_palettize8_uniform.mlpackage` | uniform 8-bit palettization | 1.40 GB | Correct but slower. It kept fixture agreement at `1.0`, but warm Core ML latency was 148.97 ms/sample versus 96.88 ms/sample for the dense fp16 package. |
+
+Compression is useful for package size, not speed, on the current graph. Linear
+int8 is not acceptable without a better quantization recipe. Uniform 8-bit
+palettization is a viable size-only artifact if a roughly 1.4 GB package is more
+important than latency.
 
 ## Target Batch Scanner
 
